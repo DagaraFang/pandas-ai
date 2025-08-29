@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PandasAI 主应用
+  pandasai:
+    build: 
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: pandasai-app
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PANDASAI_SAVE_LOGS=true
+      - PANDASAI_VERBOSE=false
+      - CHROMADB_HOST=chromadb:8000
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - chromadb
+    networks:
+      - pandasai-network
+    restart: unless-stopped
+
+  # ChromaDB 向量数据库
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: pandasai-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+    networks:
+      - pandasai-network
+    restart: unless-stopped
+
+  # Jupyter Lab (可选，用于开发)
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: pandasai-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/data
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+    networks:
+      - pandasai-network
+    restart: unless-stopped
+
+  # Redis (用于缓存)
+  redis:
+    image: redis:alpine
+    container_name: pandasai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pandasai-network
+    restart: unless-stopped
+
+volumes:
+  chromadb_data:
+  redis_data:
+
+networks:
+  pandasai-network:
+    driver: bridge

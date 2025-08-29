@@ -9,7 +9,7 @@ packages = [{include = "pandasai"}]
 
 [tool.poetry.urls]
 "Documentation" = "https://docs.getpanda.ai/"
-"Repository" = "https://github.com/sinaptik-ai/pandas-ai"
+"Repository" = "https://github.com/DagaraFang/pandas-ai"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
