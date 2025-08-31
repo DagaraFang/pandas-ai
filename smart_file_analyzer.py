@@ -4,6 +4,7 @@
 支持从指定路径读取各种格式的数据文件，并进行AI驱动的数据分析和可视化
 """
 import pandas as pd
+import numpy as np
 import requests
 import matplotlib.pyplot as plt
 import matplotlib
@@ -162,13 +163,17 @@ class FileDataAnalyzer:
         if df is None:
             return {"error": "无法读取文件"}
         
-        # 默认问题
+        # 默认问题 - 更丰富的报表类型
         if questions is None:
             questions = [
-                "请分析这个数据集的基本统计信息",
-                "数据中有哪些主要的趋势和模式？",
-                "有什么异常值或需要注意的数据质量问题吗？",
-                "基于这些数据，你有什么业务洞察和建议？"
+                "请生成完整的数据质量评估报告，包括缺失值、重复值、数据类型一致性分析",
+                "制作详细的描述性统计分析报表，包含分布特征、集中趋势、离散程度",
+                "生成数据趋势分析报告，识别时间序列模式、季节性变化、异常点检测",
+                "创建相关性分析矩阵报表，发现变量间的关联关系和潜在因果关系",
+                "制作业务洞察仪表板，提供关键指标、预警信号、决策建议",
+                "生成异常值检测报告，使用统计学方法识别离群点并分析原因",
+                "创建数据分布分析报表，包含正态性检验、偏度峰度分析",
+                "制作预测性分析报告，基于历史数据预测未来趋势"
             ]
         
         # 数据预览
@@ -238,111 +243,315 @@ class FileDataAnalyzer:
         return results
     
     def generate_charts(self, df: pd.DataFrame, file_path: str) -> str:
-        """为数据生成可视化图表"""
+        """为数据生成丰富的可视化图表报表"""
         try:
             # 确定数值列和分类列
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            datetime_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
             
-            # 创建图表
-            fig_size = (16, 12)
-            fig, axes = plt.subplots(2, 3, figsize=fig_size)
-            fig.suptitle(f'数据分析报告 - {Path(file_path).name}', fontsize=16, fontweight='bold')
+            # 尝试识别日期列
+            for col in df.columns:
+                if col not in datetime_cols:
+                    try:
+                        pd.to_datetime(df[col].dropna().head(100))
+                        datetime_cols.append(col)
+                    except:
+                        pass
             
-            # 1. 数据形状信息
+            # 创建更大的图表网格
+            fig_size = (20, 24)
+            fig, axes = plt.subplots(4, 3, figsize=fig_size)
+            fig.suptitle(f'智能数据分析报表 - {Path(file_path).name}', fontsize=18, fontweight='bold')
+            
+            # 1. 数据集概览信息
             ax1 = axes[0, 0]
-            ax1.text(0.1, 0.5, f"""
-📊 数据基本信息
+            overview_text = f"""
+📊 数据集基本信息
 
 文件: {Path(file_path).name}
-行数: {df.shape[0]:,}
-列数: {df.shape[1]}
-数值列数: {len(numeric_cols)}
-分类列数: {len(categorical_cols)}
-缺失值: {df.isnull().sum().sum()}
-内存使用: {df.memory_usage(deep=True).sum() / 1024:.1f} KB
-            """, transform=ax1.transAxes, fontsize=10, verticalalignment='center',
-                     bbox=dict(boxstyle='round', facecolor='lightblue'))
-            ax1.set_title('数据集概览')
+📈 行数: {df.shape[0]:,}
+📊 列数: {df.shape[1]}
+🔢 数值列: {len(numeric_cols)}
+🏷️ 分类列: {len(categorical_cols)}
+📅 日期列: {len(datetime_cols)}
+⚠️ 缺失值: {df.isnull().sum().sum()}
+💾 内存: {df.memory_usage(deep=True).sum() / 1024:.1f} KB
+🔄 重复行: {df.duplicated().sum()}
+            """
+            ax1.text(0.1, 0.5, overview_text, transform=ax1.transAxes, fontsize=11, 
+                    verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+            ax1.set_title('数据集概览', fontsize=14, fontweight='bold')
             ax1.axis('off')
             
-            # 2. 数值列分布（如果有）
+            # 2. 数值列分布直方图
             ax2 = axes[0, 1]
             if numeric_cols:
-                # 选择前几个数值列
                 cols_to_plot = numeric_cols[:3]
+                colors = ['skyblue', 'lightcoral', 'lightgreen']
                 for i, col in enumerate(cols_to_plot):
-                    ax2.hist(df[col].dropna(), alpha=0.7, label=col, bins=20)
-                ax2.set_title('数值列分布')
+                    ax2.hist(df[col].dropna(), alpha=0.7, label=col, bins=30, 
+                            color=colors[i % len(colors)], edgecolor='black', linewidth=0.5)
+                ax2.set_title('数值列分布直方图', fontsize=14, fontweight='bold')
                 ax2.legend()
+                ax2.grid(True, alpha=0.3)
             else:
-                ax2.text(0.5, 0.5, '无数值列', ha='center', va='center', transform=ax2.transAxes)
-                ax2.set_title('数值列分布')
+                ax2.text(0.5, 0.5, '⚠️ 无数值列数据', ha='center', va='center', 
+                        transform=ax2.transAxes, fontsize=12, 
+                        bbox=dict(boxstyle='round', facecolor='lightyellow'))
+                ax2.set_title('数值列分布直方图', fontsize=14, fontweight='bold')
             
-            # 3. 缺失值分析
+            # 3. 缺失值热力图
             ax3 = axes[0, 2]
             missing_data = df.isnull().sum()
             if missing_data.sum() > 0:
-                missing_data = missing_data[missing_data > 0].sort_values(ascending=True)
+                missing_data = missing_data[missing_data > 0].sort_values(ascending=False)
                 if len(missing_data) > 0:
-                    ax3.barh(range(len(missing_data)), missing_data.values)
+                    bars = ax3.barh(range(len(missing_data)), missing_data.values, 
+                                   color='lightcoral', edgecolor='darkred', linewidth=1)
                     ax3.set_yticks(range(len(missing_data)))
-                    ax3.set_yticklabels(missing_data.index)
-                    ax3.set_title('缺失值统计')
+                    ax3.set_yticklabels(missing_data.index, fontsize=10)
+                    ax3.set_title('缺失值统计热力图', fontsize=14, fontweight='bold')
                     ax3.set_xlabel('缺失值数量')
+                    # 添加数值标签
+                    for i, bar in enumerate(bars):
+                        width = bar.get_width()
+                        ax3.text(width + 0.1, bar.get_y() + bar.get_height()/2, 
+                                f'{int(width)}', ha='left', va='center')
+                    ax3.grid(True, alpha=0.3)
             else:
-                ax3.text(0.5, 0.5, '无缺失值', ha='center', va='center', transform=ax3.transAxes)
-                ax3.set_title('缺失值统计')
+                ax3.text(0.5, 0.5, '✅ 无缺失值\n数据质量优秀', ha='center', va='center', 
+                        transform=ax3.transAxes, fontsize=12, 
+                        bbox=dict(boxstyle='round', facecolor='lightgreen'))
+                ax3.set_title('缺失值统计热力图', fontsize=14, fontweight='bold')
             
-            # 4. 分类列分布（如果有）
+            # 4. 分类列数据饼状图（增强版）
             ax4 = axes[1, 0]
             if categorical_cols:
                 col = categorical_cols[0]
-                value_counts = df[col].value_counts().head(10)
-                ax4.pie(value_counts.values, labels=value_counts.index, autopct='%1.1f%%')
-                ax4.set_title(f'{col} 分布')
+                value_counts = df[col].value_counts().head(8)
+                colors = plt.cm.Set3(np.linspace(0, 1, len(value_counts)))
+                wedges, texts, autotexts = ax4.pie(value_counts.values, labels=value_counts.index, 
+                                                  autopct='%1.1f%%', colors=colors, startangle=90,
+                                                  explode=[0.05]*len(value_counts))
+                # 美化文本
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                ax4.set_title(f'{col} 分布饼状图', fontsize=14, fontweight='bold')
             else:
-                ax4.text(0.5, 0.5, '无分类列', ha='center', va='center', transform=ax4.transAxes)
-                ax4.set_title('分类列分布')
+                ax4.text(0.5, 0.5, '⚠️ 无分类列数据', ha='center', va='center', 
+                        transform=ax4.transAxes, fontsize=12,
+                        bbox=dict(boxstyle='round', facecolor='lightyellow'))
+                ax4.set_title('分类列分布饼状图', fontsize=14, fontweight='bold')
             
-            # 5. 相关性矩阵（如果有多个数值列）
+            # 5. 相关性热力图（增强版）
             ax5 = axes[1, 1]
             if len(numeric_cols) > 1:
                 corr_matrix = df[numeric_cols].corr()
-                im = ax5.imshow(corr_matrix, cmap='coolwarm', aspect='auto')
+                im = ax5.imshow(corr_matrix, cmap='RdYlBu_r', aspect='auto', vmin=-1, vmax=1)
                 ax5.set_xticks(range(len(numeric_cols)))
                 ax5.set_yticks(range(len(numeric_cols)))
-                ax5.set_xticklabels(numeric_cols, rotation=45)
+                ax5.set_xticklabels(numeric_cols, rotation=45, ha='right')
                 ax5.set_yticklabels(numeric_cols)
-                ax5.set_title('相关性矩阵')
+                ax5.set_title('相关性热力图', fontsize=14, fontweight='bold')
                 
-                # 添加数值标注
+                # 添加数值标注和颜色条
                 for i in range(len(numeric_cols)):
                     for j in range(len(numeric_cols)):
+                        text_color = 'white' if abs(corr_matrix.iloc[i, j]) > 0.5 else 'black'
                         ax5.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}', 
-                                ha='center', va='center')
+                                ha='center', va='center', color=text_color, fontweight='bold')
+                # 添加颜色条
+                plt.colorbar(im, ax=ax5, shrink=0.8, label='相关系数')
             else:
-                ax5.text(0.5, 0.5, '数值列不足', ha='center', va='center', transform=ax5.transAxes)
-                ax5.set_title('相关性矩阵')
+                ax5.text(0.5, 0.5, '⚠️ 数值列不足\n无法计算相关性', ha='center', va='center', 
+                        transform=ax5.transAxes, fontsize=12,
+                        bbox=dict(boxstyle='round', facecolor='lightyellow'))
+                ax5.set_title('相关性热力图', fontsize=14, fontweight='bold')
             
-            # 6. 数据质量摘要
+            # 6. 数据质量仪表板（增强版）
             ax6 = axes[1, 2]
+            completeness = ((df.size - df.isnull().sum().sum()) / df.size * 100)
+            uniqueness = (df.nunique().sum() / df.size * 100)
+            duplicates = df.duplicated().sum()
+            
+            quality_metrics = {
+                '完整性': completeness,
+                '唯一性': uniqueness,
+                '重复率': (duplicates / len(df) * 100) if len(df) > 0 else 0
+            }
+            
             quality_info = f"""
-📋 数据质量摘要
+📊 数据质量仪表板
 
-完整性: {((df.size - df.isnull().sum().sum()) / df.size * 100):.1f}%
-唯一性: {(df.nunique().sum() / df.size * 100):.1f}%
-数值列占比: {(len(numeric_cols) / len(df.columns) * 100):.1f}%
+✅ 完整性: {completeness:.1f}%
+🔍 唯一性: {uniqueness:.1f}%
+⚠️ 重复率: {quality_metrics['重复率']:.1f}%
+📊 数值列占比: {(len(numeric_cols) / len(df.columns) * 100):.1f}%
 
-🔍 检查项目:
-- 重复行: {df.duplicated().sum()}
-- 空白字符串: {(df == '').sum().sum() if df.select_dtypes(include=['object']).size > 0 else 0}
-- 零值数量: {(df == 0).sum().sum() if len(numeric_cols) > 0 else 0}
+🔍 详细检查:
+• 重复行: {duplicates:,}
+• 空白值: {(df == '').sum().sum() if df.select_dtypes(include=['object']).size > 0 else 0}
+• 零值: {(df == 0).sum().sum() if len(numeric_cols) > 0 else 0}
+• 负值: {(df[numeric_cols] < 0).sum().sum() if len(numeric_cols) > 0 else 0}
             """
-            ax6.text(0.1, 0.5, quality_info, transform=ax6.transAxes, fontsize=9,
-                     verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightyellow'))
-            ax6.set_title('数据质量评估')
+            ax6.text(0.1, 0.5, quality_info, transform=ax6.transAxes, fontsize=10,
+                     verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+            ax6.set_title('数据质量仪表板', fontsize=14, fontweight='bold')
             ax6.axis('off')
+            
+            # 7. 数值列箱线图（新增）
+            ax7 = axes[2, 0]
+            if numeric_cols:
+                cols_to_plot = numeric_cols[:4]
+                box_data = [df[col].dropna() for col in cols_to_plot]
+                bp = ax7.boxplot(box_data, labels=cols_to_plot, patch_artist=True, 
+                               notch=True, showmeans=True)
+                # 美化箱线图
+                colors = ['lightblue', 'lightcoral', 'lightgreen', 'lightyellow']
+                for patch, color in zip(bp['boxes'], colors):
+                    patch.set_facecolor(color)
+                    patch.set_alpha(0.7)
+                ax7.set_title('数值列箱线图（异常值检测）', fontsize=14, fontweight='bold')
+                ax7.set_ylabel('数值')
+                ax7.grid(True, alpha=0.3)
+                plt.setp(ax7.get_xticklabels(), rotation=45, ha='right')
+            else:
+                ax7.text(0.5, 0.5, '⚠️ 无数值列数据', ha='center', va='center', 
+                        transform=ax7.transAxes, fontsize=12,
+                        bbox=dict(boxstyle='round', facecolor='lightyellow'))
+                ax7.set_title('数值列箱线图', fontsize=14, fontweight='bold')
+            
+            # 8. 数据分布Q-Q图（新增）
+            ax8 = axes[2, 1]
+            if numeric_cols:
+                try:
+                    from scipy import stats
+                    col = numeric_cols[0]
+                    data = df[col].dropna()
+                    if len(data) > 10:
+                        stats.probplot(data, dist="norm", plot=ax8)
+                        ax8.set_title(f'{col} 正态性Q-Q图', fontsize=14, fontweight='bold')
+                        ax8.grid(True, alpha=0.3)
+                    else:
+                        ax8.text(0.5, 0.5, '数据量不足', ha='center', va='center', transform=ax8.transAxes)
+                        ax8.set_title('数据分布Q-Q图', fontsize=14, fontweight='bold')
+                except ImportError:
+                    ax8.text(0.5, 0.5, '需要scipy库', ha='center', va='center', transform=ax8.transAxes)
+                    ax8.set_title('数据分布Q-Q图', fontsize=14, fontweight='bold')
+            else:
+                ax8.text(0.5, 0.5, '无数值列数据', ha='center', va='center', transform=ax8.transAxes)
+                ax8.set_title('数据分布Q-Q图', fontsize=14, fontweight='bold')
+            
+            # 9. 数据量级对比（新增）
+            ax9 = axes[2, 2]
+            if len(df.columns) > 1:
+                # 各列的数据量级对比
+                col_stats = []
+                col_names = []
+                for col in df.columns:
+                    if df[col].dtype in ['int64', 'float64']:
+                        col_stats.append(df[col].count())
+                        col_names.append(f'{col}\n(有效值)')
+                    else:
+                        col_stats.append(df[col].nunique())
+                        col_names.append(f'{col}\n(唯一值)')
+                
+                if col_stats:
+                    bars = ax9.bar(range(len(col_stats)), col_stats, 
+                                  color=['lightblue' if i % 2 == 0 else 'lightcoral' for i in range(len(col_stats))],
+                                  edgecolor='black', linewidth=0.5)
+                    ax9.set_xticks(range(len(col_names)))
+                    ax9.set_xticklabels(col_names, rotation=45, ha='right', fontsize=9)
+                    ax9.set_title('各列数据量级对比', fontsize=14, fontweight='bold')
+                    ax9.set_ylabel('数量')
+                    ax9.grid(True, alpha=0.3)
+                    
+                    # 添加数值标签
+                    for bar, value in zip(bars, col_stats):
+                        height = bar.get_height()
+                        ax9.text(bar.get_x() + bar.get_width()/2., height + max(col_stats)*0.01,
+                                f'{value:,}', ha='center', va='bottom', fontsize=8)
+            else:
+                ax9.text(0.5, 0.5, '数据列不足', ha='center', va='center', transform=ax9.transAxes)
+                ax9.set_title('各列数据量级对比', fontsize=14, fontweight='bold')
+            
+            # 10. 数据类型分布（新增）
+            ax10 = axes[3, 0]
+            dtype_counts = df.dtypes.value_counts()
+            if len(dtype_counts) > 0:
+                colors = ['lightblue', 'lightcoral', 'lightgreen', 'lightyellow', 'lightpink']
+                wedges, texts, autotexts = ax10.pie(dtype_counts.values, 
+                                                   labels=[str(dtype) for dtype in dtype_counts.index],
+                                                   autopct='%1.1f%%', colors=colors[:len(dtype_counts)],
+                                                   startangle=90)
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                ax10.set_title('数据类型分布', fontsize=14, fontweight='bold')
+            else:
+                ax10.text(0.5, 0.5, '无数据类型', ha='center', va='center', transform=ax10.transAxes)
+                ax10.set_title('数据类型分布', fontsize=14, fontweight='bold')
+            
+            # 11. 业务指标仪表板（新增）
+            ax11 = axes[3, 1]
+            business_metrics = f"""
+📊 业务指标仪表板
+
+📊 数据量级:
+• 总记录数: {len(df):,}
+• 平均每列数据: {df.count().mean():.1f}
+
+🔍 数据密度:
+• 数据密度: {(df.count().sum() / df.size * 100):.1f}%
+• 非空率: {(df.notna().sum().sum() / df.size * 100):.1f}%
+
+📈 变化程度:
+• 平均唯一值: {df.nunique().mean():.1f}
+• 数据多样性: {(df.nunique().sum() / df.size * 100):.1f}%
+            """
+            ax11.text(0.1, 0.5, business_metrics, transform=ax11.transAxes, fontsize=10,
+                     verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightcyan', alpha=0.8))
+            ax11.set_title('业务指标仪表板', fontsize=14, fontweight='bold')
+            ax11.axis('off')
+            
+            # 12. 数据趋势分析（新增）
+            ax12 = axes[3, 2]
+            if datetime_cols and numeric_cols:
+                # 尝试创建时间序列分析
+                date_col = datetime_cols[0]
+                value_col = numeric_cols[0]
+                try:
+                    df_temp = df[[date_col, value_col]].dropna()
+                    df_temp[date_col] = pd.to_datetime(df_temp[date_col])
+                    df_temp = df_temp.sort_values(date_col)
+                    
+                    ax12.plot(df_temp[date_col], df_temp[value_col], marker='o', 
+                             linewidth=2, markersize=4, color='steelblue')
+                    ax12.set_title(f'{value_col} 时间趋势', fontsize=14, fontweight='bold')
+                    ax12.set_xlabel('时间')
+                    ax12.set_ylabel(value_col)
+                    ax12.grid(True, alpha=0.3)
+                    plt.setp(ax12.get_xticklabels(), rotation=45, ha='right')
+                except:
+                    ax12.text(0.5, 0.5, '无法解析时间数据', ha='center', va='center', transform=ax12.transAxes)
+                    ax12.set_title('数据趋势分析', fontsize=14, fontweight='bold')
+            else:
+                trend_info = f"""
+📈 趋势分析摘要
+
+日期列: {len(datetime_cols)}
+数值列: {len(numeric_cols)}
+
+现有数据类型:
+{chr(10).join([f'• {col}: {str(df[col].dtype)}' for col in df.columns[:5]])}
+{'...' if len(df.columns) > 5 else ''}
+                """
+                ax12.text(0.1, 0.5, trend_info, transform=ax12.transAxes, fontsize=9,
+                         verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lavender', alpha=0.8))
+                ax12.set_title('数据趋势分析', fontsize=14, fontweight='bold')
+                ax12.axis('off')
             
             plt.tight_layout()
             
